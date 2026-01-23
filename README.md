@@ -8,13 +8,13 @@ A real-time global situational awareness platform that plots security events, ge
 
 ## Features
 
-                                                                                    ### Core Features
+### Core Features
 
-                                                                                    - **Real-Time Event Mapping** - Plot breaking news events (conflicts, protests, natural disasters) on a world map with color-coded threat levels
-                                                                                    - **Interactive Mapbox Map** - Dark-themed map with clustering, heatmap visualization, and smooth navigation
-                                                                                    - **Event Feed** - Real-time filterable feed of global events with category and threat level filters
-                                                                                    - **Entity Search** - Research organizations, people, countries, and groups using Valyu's intelligence APIs
-                                                                                    - **Alert System** - Configure keyword and region-based alerts with real-time notifications
+- **Real-Time Event Mapping** - Plot breaking news events (conflicts, protests, natural disasters) on a world map with color-coded threat levels
+- **Interactive Mapbox Map** - Dark-themed map with clustering, heatmap visualization, and smooth navigation
+- **Event Feed** - Real-time filterable feed of global events with category and threat level filters
+- **Entity Search** - Research organizations, people, countries, and groups using Valyu's intelligence APIs
+- **Alert System** - Configure keyword and region-based alerts with real-time notifications
 
 ### Country Intelligence
 
