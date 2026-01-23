@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useValyuSearch, type Deliverables } from "@/hooks/use-valyu-search";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,12 +23,10 @@ import {
   MapPin,
   Navigation,
   Lock,
-  Download,
   FileSpreadsheet,
   Presentation,
   File,
   Maximize2,
-  X,
 } from "lucide-react";
 import { Favicon } from "@/components/ui/favicon";
 import { useMapStore } from "@/stores/map-store";
@@ -67,15 +64,8 @@ interface DeepResearchResult {
 export function EntitySearch() {
   const [query, setQuery] = useState("");
   const [entity, setEntity] = useState<EntityProfile | null>(null);
-  const [showDeepResearch, setShowDeepResearch] = useState(false);
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showFullReport, setShowFullReport] = useState(false);
-
-  // Quick answer streaming state
-  const [quickAnswerContent, setQuickAnswerContent] = useState("");
-  const [quickAnswerSources, setQuickAnswerSources] = useState<Array<{ title: string; url: string }>>([]);
-  const [isStreamingQuickAnswer, setIsStreamingQuickAnswer] = useState(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
 
   // Deep research state
   const [deepResearchTaskId, setDeepResearchTaskId] = useState<string | null>(null);
@@ -84,20 +74,17 @@ export function EntitySearch() {
   const [deepResearchError, setDeepResearchError] = useState<string | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { error } = useValyuSearch();
   const { flyTo, setEntityLocations, clearEntityLocations } = useMapStore();
   const { isAuthenticated, accessToken } = useAuthStore();
 
   const requiresAuth = APP_MODE === "valyu";
+  const isLoading = !!deepResearchTaskId;
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
-      }
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
       }
     };
   }, []);
@@ -162,20 +149,12 @@ export function EntitySearch() {
       return;
     }
 
-    // Close any existing EventSource
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
-
     // Reset state
     clearEntityLocations();
     setEntity(null);
-    setQuickAnswerContent("");
-    setQuickAnswerSources([]);
     setDeepResearchResult(null);
     setDeepResearchProgress(null);
     setDeepResearchError(null);
-    setIsStreamingQuickAnswer(true);
 
     // Create placeholder entity
     setEntity({
@@ -188,64 +167,23 @@ export function EntitySearch() {
       economicData: {},
     });
 
-    // If deep research is enabled, start it in parallel
-    if (showDeepResearch) {
-      fetch("/api/deepresearch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: query, accessToken }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.error) {
-            setDeepResearchError(data.error);
-          } else if (data.taskId) {
-            setDeepResearchTaskId(data.taskId);
-          }
-        })
-        .catch(() => {
-          setDeepResearchError("Failed to start deep research");
-        });
-    }
-
-    // Stream quick answer
-    const eventSource = new EventSource(
-      `/api/entities?name=${encodeURIComponent(query)}&stream=true`
-    );
-    eventSourceRef.current = eventSource;
-
-    eventSource.onmessage = (event) => {
-      try {
-        const chunk = JSON.parse(event.data);
-
-        switch (chunk.type) {
-          case "content":
-            setQuickAnswerContent((prev) => prev + (chunk.content || ""));
-            break;
-
-          case "sources":
-            setQuickAnswerSources(chunk.sources || []);
-            break;
-
-          case "done":
-            setIsStreamingQuickAnswer(false);
-            eventSource.close();
-            break;
-
-          case "error":
-            setIsStreamingQuickAnswer(false);
-            eventSource.close();
-            break;
+    // Start deep research
+    fetch("/api/deepresearch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: query, accessToken }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) {
+          setDeepResearchError(data.error);
+        } else if (data.taskId) {
+          setDeepResearchTaskId(data.taskId);
         }
-      } catch {
-        // Ignore JSON parse errors
-      }
-    };
-
-    eventSource.onerror = () => {
-      setIsStreamingQuickAnswer(false);
-      eventSource.close();
-    };
+      })
+      .catch(() => {
+        setDeepResearchError("Failed to start research");
+      });
   };
 
   const handleShowOnMap = () => {
@@ -267,8 +205,6 @@ export function EntitySearch() {
   };
 
   const TypeIcon = entity ? typeIcons[entity.type] : Building2;
-  const isDeepResearchLoading = !!deepResearchTaskId;
-  const anyLoading = isStreamingQuickAnswer || isDeepResearchLoading;
 
   // Get deliverable by type
   const getDeliverable = (type: string) => {
@@ -282,7 +218,7 @@ export function EntitySearch() {
       <div className="border-b border-border p-4">
         <h2 className="text-lg font-semibold text-foreground">Build Dossier</h2>
         <p className="text-sm text-muted-foreground">
-          Compile intel on any actor - mapped locations, relationships, and sourced analysis
+          Deep research on any actor with sourced analysis
         </p>
       </div>
 
@@ -298,32 +234,21 @@ export function EntitySearch() {
               className="pl-9"
             />
           </div>
-          <Button onClick={handleSearch} disabled={anyLoading || !query.trim()}>
-            {isStreamingQuickAnswer ? (
+          <Button onClick={handleSearch} disabled={isLoading || !query.trim()}>
+            {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              "Search"
+              "Research"
             )}
           </Button>
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showDeepResearch}
-            onChange={(e) => setShowDeepResearch(e.target.checked)}
-            className="rounded border-border"
-          />
-          <span>Full dossier with deep research</span>
-          <Badge variant="secondary" className="text-xs">CSV + PPTX</Badge>
-        </label>
-
         {/* Deep research progress */}
-        {isDeepResearchLoading && (
+        {isLoading && (
           <div className="rounded-lg bg-primary/10 border border-primary/20 p-3 text-sm">
             <div className="flex items-center gap-2 text-foreground font-medium mb-2">
               <Loader2 className="h-4 w-4 animate-spin text-primary" />
-              Deep Research in Progress
+              Generating Intelligence Report
             </div>
             {deepResearchProgress ? (
               <div className="space-y-1">
@@ -346,8 +271,7 @@ export function EntitySearch() {
               </div>
             )}
             <p className="text-muted-foreground text-xs mt-2">
-              This typically takes <span className="text-foreground font-medium">5-10 minutes</span>.
-              Researching sources, generating ~50 page report with CSV export and PowerPoint briefing.
+              This takes <span className="text-foreground font-medium">5-10 minutes</span> but produces an extremely detailed report with CSV data export and PowerPoint briefing.
             </p>
           </div>
         )}
@@ -361,13 +285,7 @@ export function EntitySearch() {
       </div>
 
       <ScrollArea className="flex-1 p-4">
-        {error && (
-          <div className="rounded-lg bg-destructive/10 p-4 text-center">
-            <p className="text-sm text-destructive">{error}</p>
-          </div>
-        )}
-
-        {entity && (
+        {entity && deepResearchResult && (
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-start gap-3">
@@ -383,164 +301,82 @@ export function EntitySearch() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {(quickAnswerContent || isStreamingQuickAnswer) && (
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="text-sm font-medium text-foreground">
-                      {isDeepResearchLoading ? "Quick Answer" : "Overview"}
-                    </h4>
-                    {isDeepResearchLoading && (
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                        Full report loading...
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    <Markdown content={quickAnswerContent} />
-                    {isStreamingQuickAnswer && (
-                      <span className="inline-block h-4 w-1 animate-pulse bg-primary ml-0.5" />
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* Deep Research Report Preview */}
-              {deepResearchResult && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      <FileText className="h-4 w-4" />
-                      Intelligence Report
-                    </h4>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowFullReport(true)}
-                      className="h-7 text-xs"
-                    >
-                      <Maximize2 className="mr-1 h-3 w-3" />
-                      View Full Report
-                    </Button>
-                  </div>
-
-                  {/* Preview - first 500 chars */}
-                  <div className="text-sm text-muted-foreground max-h-40 overflow-hidden relative">
-                    <Markdown content={deepResearchResult.output.slice(0, 800) + "..."} />
-                    <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-card to-transparent" />
-                  </div>
-
-                  {/* Deliverables Download Buttons */}
-                  <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
-                    {getDeliverable("csv") && (
-                      <a
-                        href={getDeliverable("csv")!.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex"
-                      >
-                        <Button variant="outline" size="sm" className="h-8 text-xs">
-                          <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5 text-green-500" />
-                          Download CSV
-                        </Button>
-                      </a>
-                    )}
-                    {getDeliverable("pptx") && (
-                      <a
-                        href={getDeliverable("pptx")!.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex"
-                      >
-                        <Button variant="outline" size="sm" className="h-8 text-xs">
-                          <Presentation className="mr-1.5 h-3.5 w-3.5 text-orange-500" />
-                          Download PPTX
-                        </Button>
-                      </a>
-                    )}
-                    {deepResearchResult.pdfUrl && (
-                      <a
-                        href={deepResearchResult.pdfUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex"
-                      >
-                        <Button variant="outline" size="sm" className="h-8 text-xs">
-                          <File className="mr-1.5 h-3.5 w-3.5 text-red-500" />
-                          Download PDF
-                        </Button>
-                      </a>
-                    )}
-                  </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <FileText className="h-4 w-4" />
+                    Intelligence Report
+                  </h4>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowFullReport(true)}
+                    className="h-7 text-xs"
+                  >
+                    <Maximize2 className="mr-1 h-3 w-3" />
+                    View Full Report
+                  </Button>
                 </div>
-              )}
 
-              {entity.locations && entity.locations.length > 0 && (
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <h4 className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      <MapPin className="h-4 w-4" />
-                      Locations ({entity.locations.length})
-                    </h4>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleShowOnMap}
-                      className="h-7 text-xs"
-                    >
-                      <Navigation className="mr-1 h-3 w-3" />
-                      Show All on Map
-                    </Button>
-                  </div>
-                  <div className="space-y-1">
-                    {entity.locations.map((location, i) => (
-                      <button
-                        key={i}
-                        onClick={() =>
-                          handleFlyToLocation(location.longitude, location.latitude)
-                        }
-                        className="flex w-full items-center gap-2 rounded-lg bg-muted/50 p-2 text-left text-sm hover:bg-muted transition-colors"
-                      >
-                        <MapPin className="h-3 w-3 text-primary shrink-0" />
-                        <span className="flex-1 truncate">
-                          {location.placeName || location.country || "Unknown"}
-                        </span>
-                        {location.country && location.placeName !== location.country && (
-                          <Badge variant="secondary" className="text-xs shrink-0">
-                            {location.country}
-                          </Badge>
-                        )}
-                      </button>
-                    ))}
-                  </div>
+                {/* Preview - first 800 chars */}
+                <div className="text-sm text-muted-foreground max-h-40 overflow-hidden relative">
+                  <Markdown content={deepResearchResult.output.slice(0, 800) + "..."} />
+                  <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-card to-transparent" />
                 </div>
-              )}
 
-              {entity.relatedEntities && entity.relatedEntities.length > 0 && (
+                {/* Deliverables Download Buttons */}
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+                  {getDeliverable("csv") && (
+                    <a
+                      href={getDeliverable("csv")!.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex"
+                    >
+                      <Button variant="outline" size="sm" className="h-8 text-xs">
+                        <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5 text-green-500" />
+                        Download CSV
+                      </Button>
+                    </a>
+                  )}
+                  {getDeliverable("pptx") && (
+                    <a
+                      href={getDeliverable("pptx")!.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex"
+                    >
+                      <Button variant="outline" size="sm" className="h-8 text-xs">
+                        <Presentation className="mr-1.5 h-3.5 w-3.5 text-orange-500" />
+                        Download PPTX
+                      </Button>
+                    </a>
+                  )}
+                  {deepResearchResult.pdfUrl && (
+                    <a
+                      href={deepResearchResult.pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex"
+                    >
+                      <Button variant="outline" size="sm" className="h-8 text-xs">
+                        <File className="mr-1.5 h-3.5 w-3.5 text-red-500" />
+                        Download PDF
+                      </Button>
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Sources */}
+              {deepResearchResult.sources.length > 0 && (
                 <div>
                   <h4 className="mb-2 text-sm font-medium text-foreground">
-                    Related Entities
-                  </h4>
-                  <div className="space-y-2">
-                    {entity.relatedEntities.map((related, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between rounded-lg bg-muted/50 p-2 text-sm"
-                      >
-                        <span className="font-medium">{related.name}</span>
-                        <Badge variant="secondary">{related.relationship}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {quickAnswerSources.length > 0 && (
-                <div>
-                  <h4 className="mb-2 text-sm font-medium text-foreground">
-                    Sources ({quickAnswerSources.length})
+                    Sources ({deepResearchResult.sources.length})
                   </h4>
                   <div className="space-y-1">
-                    {quickAnswerSources.slice(0, 10).map((source, i) => (
+                    {deepResearchResult.sources.slice(0, 10).map((source, i) => (
                       <a
                         key={i}
                         href={source.url}
@@ -559,21 +395,19 @@ export function EntitySearch() {
           </Card>
         )}
 
-        {!entity && !isStreamingQuickAnswer && !error && (
+        {!entity && !isLoading && (
           <div className="py-8 text-center">
             <FileText className="mx-auto h-12 w-12 text-muted-foreground/50" />
             <p className="mt-4 text-sm text-muted-foreground">
-              Enter any actor to compile a dossier
+              Enter any actor to compile an intelligence dossier
             </p>
             <div className="mt-3 space-y-1 text-xs text-muted-foreground/70">
               <p>Wagner Group, Houthis, Hezbollah, North Korea</p>
               <p>Nations, militias, PMCs, cartels, political figures</p>
             </div>
-            {showDeepResearch && (
-              <div className="mt-4 p-3 rounded-lg bg-primary/10 text-xs text-primary">
-                Full dossier enabled - includes downloadable CSV data export and PowerPoint briefing
-              </div>
-            )}
+            <div className="mt-4 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
+              <p>Reports take <span className="text-foreground font-medium">5-10 minutes</span> to generate but are extremely detailed with downloadable CSV data and PowerPoint briefings.</p>
+            </div>
             {requiresAuth && !isAuthenticated && (
               <div className="mt-4 flex items-center justify-center gap-2 text-sm text-amber-600 dark:text-amber-400">
                 <Lock className="h-4 w-4" />
@@ -581,6 +415,32 @@ export function EntitySearch() {
               </div>
             )}
           </div>
+        )}
+
+        {entity && isLoading && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20">
+                  <TypeIcon className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-lg">{entity.name}</CardTitle>
+                  <Badge variant="outline" className="mt-1 capitalize">
+                    {entity.type}
+                  </Badge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
+                <div className="h-4 bg-muted rounded animate-pulse w-full" />
+                <div className="h-4 bg-muted rounded animate-pulse w-5/6" />
+                <div className="h-4 bg-muted rounded animate-pulse w-2/3" />
+              </div>
+            </CardContent>
+          </Card>
         )}
       </ScrollArea>
 
