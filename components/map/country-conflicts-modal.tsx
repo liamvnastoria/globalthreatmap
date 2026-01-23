@@ -13,13 +13,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Swords,
   ExternalLink,
-  Globe,
   History,
   AlertTriangle,
-  MessageSquare,
   Database,
   RotateCw,
 } from "lucide-react";
+import { Favicon } from "@/components/ui/favicon";
 import { cn } from "@/lib/utils";
 
 interface CountryConflictsModalProps {
@@ -350,9 +349,9 @@ export function CountryConflictsModal({
                           href={source.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm transition-colors hover:bg-muted/50"
+                          className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm transition-colors hover:bg-muted/50"
                         >
-                          <Globe className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                          <Favicon url={source.url} size={20} className="mt-0.5" />
                           <div className="flex-1 min-w-0">
                             <span className="line-clamp-2 text-foreground">
                               {source.title}
