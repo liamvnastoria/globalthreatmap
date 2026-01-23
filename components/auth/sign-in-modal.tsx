@@ -75,14 +75,8 @@ export function SignInModal({ open, onOpenChange }: SignInModalProps) {
         <DialogTitle className="text-center text-xl">Sign in</DialogTitle>
       </DialogHeader>
       <DialogContent className="space-y-6">
-        <p className="text-center text-muted-foreground">
-          Valyu is the information backbone of Global Threat Map, giving our app
-          access to real-time data across web, academic, and proprietary
-          sources.
-        </p>
-
         <p className="text-center text-sm text-muted-foreground">
-          Free to use.
+          Sign in to access all features.
         </p>
 
         {/* Error Message */}

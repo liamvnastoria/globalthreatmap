@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { searchEvents } from "@/lib/valyu";
 import { isSelfHostedMode } from "@/lib/app-mode";
-import { geocodeLocationsFromText } from "@/lib/geocoding";
-import { createThreatEvent } from "@/lib/event-classifier";
+import { classifyEvent, isAIClassificationEnabled } from "@/lib/ai-classifier";
+import { generateEventId } from "@/lib/utils";
+import { extractKeywords, extractEntities } from "@/lib/event-classifier";
 import type { ThreatEvent } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -17,34 +18,49 @@ const THREAT_QUERIES = [
   "diplomatic summit sanctions",
 ];
 
+// Clean boilerplate from content
+function cleanContent(text: string): string {
+  return text
+    .replace(/skip to (?:main |primary )?content/gi, "")
+    .replace(/keyboard shortcuts?/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 async function processSearchResults(
   results: Array<{ title: string; url: string; content: string; publishedDate?: string; source?: string }>
 ): Promise<ThreatEvent[]> {
   const eventsWithLocations = await Promise.all(
     results.map(async (result) => {
-      const locations = await geocodeLocationsFromText(
-        `${result.title} ${result.content}`,
-        result.title
-      );
+      const cleanedTitle = cleanContent(result.title);
+      const cleanedContent = cleanContent(result.content);
+      const fullText = `${cleanedTitle} ${cleanedContent}`;
 
-      const location = locations[0] || {
-        latitude: 0,
-        longitude: 0,
-        placeName: "Unknown",
-      };
+      // Use AI classification (falls back to keywords if OpenAI not available)
+      const classification = await classifyEvent(cleanedTitle, cleanedContent);
 
-      if (location.latitude === 0 && location.longitude === 0) {
+      // Skip events without valid locations
+      if (!classification.location) {
         return null;
       }
 
-      return createThreatEvent(
-        result.title,
-        result.content,
-        location,
-        result.source || "web",
-        result.url,
-        result.publishedDate
-      );
+      const event: ThreatEvent = {
+        id: generateEventId(),
+        title: cleanedTitle,
+        summary: cleanedContent.slice(0, 500),
+        category: classification.category,
+        threatLevel: classification.threatLevel,
+        location: classification.location,
+        timestamp: result.publishedDate || new Date().toISOString(),
+        source: result.source || "web",
+        sourceUrl: result.url,
+        entities: extractEntities(fullText),
+        keywords: extractKeywords(fullText),
+        rawContent: cleanedContent,
+      };
+
+      return event;
     })
   );
 

@@ -8,13 +8,13 @@ A real-time global situational awareness platform that plots security events, ge
 
 ## Features
 
-                                                                                    ### Core Features
+### Core Features
 
-                                                                                    - **Real-Time Event Mapping** - Plot breaking news events (conflicts, protests, natural disasters) on a world map with color-coded threat levels
-                                                                                    - **Interactive Mapbox Map** - Dark-themed map with clustering, heatmap visualization, and smooth navigation
-                                                                                    - **Event Feed** - Real-time filterable feed of global events with category and threat level filters
-                                                                                    - **Entity Search** - Research organizations, people, countries, and groups using Valyu's intelligence APIs
-                                                                                    - **Alert System** - Configure keyword and region-based alerts with real-time notifications
+- **Real-Time Event Mapping** - Plot breaking news events (conflicts, protests, natural disasters) on a world map with color-coded threat levels
+- **Interactive Mapbox Map** - Dark-themed map with clustering, heatmap visualization, and smooth navigation
+- **Event Feed** - Real-time filterable feed of global events with category and threat level filters
+- **Entity Search** - Research organizations, people, countries, and groups using Valyu's intelligence APIs
+- **Alert System** - Configure keyword and region-based alerts with real-time notifications
 
 ### Country Intelligence
 
@@ -192,7 +192,7 @@ This app uses [Valyu](https://valyu.ai) for intelligence data:
 - **Answer API** - Synthesizing conflict intelligence and military base data
 - **Deep Research** - Comprehensive entity analysis
 
-All Valyu queries exclude Wikipedia to ensure higher-quality source citations.
+Wikipedia is excluded from search results.
 
 ## Authentication
 
@@ -203,7 +203,7 @@ Global Threat Map supports two app modes controlled by the `NEXT_PUBLIC_APP_MODE
 | Mode | Description |
 |------|-------------|
 | `self-hosted` | Default mode. No authentication required. All features are freely accessible. |
-| `valyu` | OAuth mode. Users sign in with Valyu to access premium features. |
+| `valyu` | OAuth mode. Users sign in with Valyu to access additional features. |
 
 ### Self-Hosted Mode (Default)
 
@@ -245,7 +245,7 @@ When running in valyu mode, certain features require authentication:
 | Entity search | ❌ Blocked | ✅ Unlimited |
 | Military bases | ✅ Free | ✅ Free |
 
-After users exhaust their free usage, a sign-in modal prompts them to authenticate with Valyu. New Valyu accounts receive **$10 in free credits**.
+After users exhaust their free usage, a sign-in modal prompts them to authenticate.
 
 ### OAuth Flow
 

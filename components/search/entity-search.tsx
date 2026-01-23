@@ -15,11 +15,11 @@ import {
   Globe,
   Users,
   FileText,
-  ExternalLink,
   MapPin,
   Navigation,
   Lock,
 } from "lucide-react";
+import { Favicon } from "@/components/ui/favicon";
 import { useMapStore } from "@/stores/map-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { Markdown } from "@/components/ui/markdown";
@@ -252,10 +252,10 @@ export function EntitySearch() {
                           href={source.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-sm text-primary hover:underline"
+                          className="flex items-center gap-2 text-sm text-foreground hover:text-primary transition-colors"
                         >
-                          <ExternalLink className="h-3 w-3" />
-                          {source.title}
+                          <Favicon url={source.url} size={16} />
+                          <span className="truncate">{source.title}</span>
                         </a>
                       ))}
                     </div>
