@@ -35,7 +35,7 @@ export function useEvents(options: UseEventsOptions = {}) {
   const [requiresSignIn, setRequiresSignIn] = useState(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const initialFetchRef = useRef(false);
+  const hasFetchedRef = useRef(false);
   const eventsRef = useRef(events);
 
   // Keep events ref updated
@@ -45,9 +45,10 @@ export function useEvents(options: UseEventsOptions = {}) {
 
   const requiresAuth = APP_MODE === "valyu";
 
-  const fetchEvents = useCallback(async (isInitialLoad = false) => {
+  // Core fetch function - doesn't depend on isAuthenticated to avoid stale closures
+  const doFetch = useCallback(async (isInitialLoad: boolean, skipAuthCheck: boolean) => {
     // After initial load, require sign-in for refreshes (in valyu mode only)
-    if (requiresAuth && !isInitialLoad && !isAuthenticated) {
+    if (requiresAuth && !skipAuthCheck && !isInitialLoad) {
       setRequiresSignIn(true);
       setLoading(false);
       return;
@@ -80,9 +81,9 @@ export function useEvents(options: UseEventsOptions = {}) {
 
       const newEvents: ThreatEvent[] = data.events || [];
 
-      if (!initialFetchRef.current) {
+      if (isInitialLoad) {
         setEvents(newEvents);
-        initialFetchRef.current = true;
+        hasFetchedRef.current = true;
       } else {
         const existingIds = new Set(eventsRef.current.map((e) => e.id));
         const trulyNewEvents = newEvents.filter((e) => !existingIds.has(e.id));
@@ -96,7 +97,7 @@ export function useEvents(options: UseEventsOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [queries, setEvents, addEvents, setLoading, setError, getAccessToken, signOut, requiresAuth, isAuthenticated]);
+  }, [queries, setEvents, addEvents, setLoading, setError, getAccessToken, signOut, requiresAuth]);
 
   const refresh = useCallback(() => {
     // After initial load, require sign-in for refreshes
@@ -104,15 +105,15 @@ export function useEvents(options: UseEventsOptions = {}) {
       setRequiresSignIn(true);
       return;
     }
-    fetchEvents(false);
-  }, [fetchEvents, requiresAuth, isAuthenticated]);
+    doFetch(false, isAuthenticated);
+  }, [doFetch, requiresAuth, isAuthenticated]);
 
-  // Initial fetch - runs once on mount
+  // Initial fetch on mount - always allowed (first load is free)
   useEffect(() => {
-    if (!initialFetchRef.current) {
-      fetchEvents(true);
+    if (!hasFetchedRef.current) {
+      doFetch(true, true); // skipAuthCheck = true for initial load
     }
-  }, []); // Empty deps - only run on mount
+  }, [doFetch]);
 
   // Auto-refresh - only if authenticated
   useEffect(() => {
@@ -121,8 +122,8 @@ export function useEvents(options: UseEventsOptions = {}) {
       intervalRef.current = null;
     }
 
-    if (autoRefresh && isAuthenticated && initialFetchRef.current) {
-      intervalRef.current = setInterval(() => fetchEvents(false), refreshInterval);
+    if (autoRefresh && isAuthenticated && hasFetchedRef.current) {
+      intervalRef.current = setInterval(() => doFetch(false, true), refreshInterval);
     }
 
     return () => {
@@ -130,7 +131,7 @@ export function useEvents(options: UseEventsOptions = {}) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [autoRefresh, refreshInterval, isAuthenticated, fetchEvents]);
+  }, [autoRefresh, refreshInterval, isAuthenticated, doFetch]);
 
   useEffect(() => {
     if (isAuthenticated) {
