@@ -36,11 +36,17 @@ export function useEvents(options: UseEventsOptions = {}) {
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const initialFetchRef = useRef(false);
+  const eventsRef = useRef(events);
+
+  // Keep events ref updated
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
 
   const requiresAuth = APP_MODE === "valyu";
 
   const fetchEvents = useCallback(async (isInitialLoad = false) => {
-    // After initial load, require sign-in for refreshes
+    // After initial load, require sign-in for refreshes (in valyu mode only)
     if (requiresAuth && !isInitialLoad && !isAuthenticated) {
       setRequiresSignIn(true);
       setLoading(false);
@@ -59,25 +65,26 @@ export function useEvents(options: UseEventsOptions = {}) {
         body: JSON.stringify({ queries: queries || [], accessToken }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch events");
-      }
-
       const data = await response.json();
 
-      if (data.requiresReauth) {
-        signOut();
-        setError("Session expired. Please sign in again.");
-        return;
+      // Handle auth errors (401 or requiresReauth flag)
+      if (!response.ok || data.requiresReauth) {
+        if (response.status === 401 || data.requiresReauth) {
+          signOut();
+          setRequiresSignIn(true);
+          setError("Session expired. Please sign in again.");
+          return;
+        }
+        throw new Error(data.error || "Failed to fetch events");
       }
 
-      const newEvents: ThreatEvent[] = data.events;
+      const newEvents: ThreatEvent[] = data.events || [];
 
       if (!initialFetchRef.current) {
         setEvents(newEvents);
         initialFetchRef.current = true;
       } else {
-        const existingIds = new Set(events.map((e) => e.id));
+        const existingIds = new Set(eventsRef.current.map((e) => e.id));
         const trulyNewEvents = newEvents.filter((e) => !existingIds.has(e.id));
 
         if (trulyNewEvents.length > 0) {
@@ -89,7 +96,7 @@ export function useEvents(options: UseEventsOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [queries, events, setEvents, addEvents, setLoading, setError, getAccessToken, signOut, requiresAuth, isAuthenticated]);
+  }, [queries, setEvents, addEvents, setLoading, setError, getAccessToken, signOut, requiresAuth, isAuthenticated]);
 
   const refresh = useCallback(() => {
     // After initial load, require sign-in for refreshes
@@ -100,14 +107,21 @@ export function useEvents(options: UseEventsOptions = {}) {
     fetchEvents(false);
   }, [fetchEvents, requiresAuth, isAuthenticated]);
 
+  // Initial fetch - runs once on mount
   useEffect(() => {
     if (!initialFetchRef.current) {
-      // First load is always free
       fetchEvents(true);
     }
+  }, []); // Empty deps - only run on mount
 
-    // Only auto-refresh if authenticated (after initial load)
-    if (autoRefresh && isAuthenticated) {
+  // Auto-refresh - only if authenticated
+  useEffect(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    if (autoRefresh && isAuthenticated && initialFetchRef.current) {
       intervalRef.current = setInterval(() => fetchEvents(false), refreshInterval);
     }
 
@@ -116,7 +130,7 @@ export function useEvents(options: UseEventsOptions = {}) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [autoRefresh, refreshInterval, fetchEvents, isAuthenticated]);
+  }, [autoRefresh, refreshInterval, isAuthenticated, fetchEvents]);
 
   useEffect(() => {
     if (isAuthenticated) {
