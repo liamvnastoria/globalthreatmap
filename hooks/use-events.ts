@@ -26,7 +26,6 @@ export function useEvents(options: UseEventsOptions = {}) {
     isLoading,
     error,
     setEvents,
-    addEvents,
     setLoading,
     setError,
   } = useEventsStore();
@@ -35,13 +34,13 @@ export function useEvents(options: UseEventsOptions = {}) {
   const [requiresSignIn, setRequiresSignIn] = useState(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const initialFetchRef = useRef(false);
 
   const requiresAuth = APP_MODE === "valyu";
 
-  const fetchEvents = useCallback(async (isInitialLoad = false) => {
-    // After initial load, require sign-in for refreshes
-    if (requiresAuth && !isInitialLoad && !isAuthenticated) {
+  // Fetch events from API
+  const fetchEvents = useCallback(async () => {
+    // In valyu mode, require sign-in for all event fetches
+    if (requiresAuth && !isAuthenticated) {
       setRequiresSignIn(true);
       setLoading(false);
       return;
@@ -59,56 +58,48 @@ export function useEvents(options: UseEventsOptions = {}) {
         body: JSON.stringify({ queries: queries || [], accessToken }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch events");
-      }
-
       const data = await response.json();
 
-      if (data.requiresReauth) {
+      // Handle auth errors
+      if (response.status === 401 || data.requiresReauth) {
         signOut();
+        setRequiresSignIn(true);
         setError("Session expired. Please sign in again.");
         return;
       }
 
-      const newEvents: ThreatEvent[] = data.events;
-
-      if (!initialFetchRef.current) {
-        setEvents(newEvents);
-        initialFetchRef.current = true;
-      } else {
-        const existingIds = new Set(events.map((e) => e.id));
-        const trulyNewEvents = newEvents.filter((e) => !existingIds.has(e.id));
-
-        if (trulyNewEvents.length > 0) {
-          addEvents(trulyNewEvents);
-        }
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch events");
       }
+
+      const newEvents: ThreatEvent[] = data.events || [];
+      setEvents(newEvents);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error occurred");
     } finally {
       setLoading(false);
     }
-  }, [queries, events, setEvents, addEvents, setLoading, setError, getAccessToken, signOut, requiresAuth, isAuthenticated]);
+  }, [queries, setEvents, setLoading, setError, getAccessToken, signOut, requiresAuth, isAuthenticated]);
 
+  // Manual refresh
   const refresh = useCallback(() => {
-    // After initial load, require sign-in for refreshes
-    if (requiresAuth && !isAuthenticated) {
-      setRequiresSignIn(true);
-      return;
-    }
-    fetchEvents(false);
-  }, [fetchEvents, requiresAuth, isAuthenticated]);
+    fetchEvents();
+  }, [fetchEvents]);
 
+  // Initial fetch on mount (or when auth changes)
   useEffect(() => {
-    if (!initialFetchRef.current) {
-      // First load is always free
-      fetchEvents(true);
+    fetchEvents();
+  }, [fetchEvents]);
+
+  // Auto-refresh - only if authenticated
+  useEffect(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
 
-    // Only auto-refresh if authenticated (after initial load)
     if (autoRefresh && isAuthenticated) {
-      intervalRef.current = setInterval(() => fetchEvents(false), refreshInterval);
+      intervalRef.current = setInterval(fetchEvents, refreshInterval);
     }
 
     return () => {
@@ -116,7 +107,7 @@ export function useEvents(options: UseEventsOptions = {}) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [autoRefresh, refreshInterval, fetchEvents, isAuthenticated]);
+  }, [autoRefresh, refreshInterval, isAuthenticated, fetchEvents]);
 
   useEffect(() => {
     if (isAuthenticated) {
