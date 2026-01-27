@@ -58,7 +58,9 @@ export async function initiateOAuthFlow() {
 
   // Store code verifier in localStorage (needed for token exchange)
   // Using localStorage instead of sessionStorage to persist across tabs/redirects
+  // Include timestamp for expiration check
   localStorage.setItem("oauth_code_verifier", codeVerifier);
+  localStorage.setItem("oauth_timestamp", Date.now().toString());
 
   // Generate random state for CSRF protection
   const state = generateCodeVerifier();
