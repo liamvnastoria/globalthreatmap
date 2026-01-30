@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogHeader,
@@ -9,7 +7,6 @@ import {
   DialogContent,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { initiateOAuthFlow, isOAuthConfigured } from "@/lib/oauth";
 
 interface SignInModalProps {
   open: boolean;
@@ -36,37 +33,8 @@ function ValyuLogoWithText() {
 }
 
 export function SignInModal({ open, onOpenChange }: SignInModalProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleValyuSignIn = async () => {
-    setIsLoading(true);
-    setError(null);
-
-    // Check if OAuth is configured
-    if (!isOAuthConfigured()) {
-      setError(
-        "OAuth is not configured. Please contact the administrator or use self-hosted mode."
-      );
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      // Initiate PKCE OAuth flow
-      await initiateOAuthFlow();
-    } catch (err) {
-      console.error("OAuth initiation error:", err);
-      setError("Failed to initiate sign in. Please try again.");
-      setIsLoading(false);
-    }
-  };
-
   const handleClose = () => {
-    if (!isLoading) {
-      setError(null);
-      onOpenChange(false);
-    }
+    onOpenChange(false);
   };
 
   return (
@@ -83,35 +51,21 @@ export function SignInModal({ open, onOpenChange }: SignInModalProps) {
           Valyu is the intelligence layer of GTM. It gives access to real-time web search, financial, academic, medical research and proprietary data sources.
         </p>
 
-        {/* Error Message */}
-        {error && (
-          <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+        {/* Signups Halted Notice */}
+        <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4 text-center">
+          <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
+            Due to extreme demand, signups are currently paused
+          </p>
+        </div>
 
-        {/* Sign In Button */}
+        {/* Sign In Button - Disabled */}
         <Button
-          onClick={handleValyuSignIn}
-          disabled={isLoading}
-          className="w-full h-12"
+          disabled={true}
+          className="w-full h-12 opacity-50 cursor-not-allowed"
         >
-          {isLoading ? (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin mr-2" />
-              Redirecting to Valyu...
-            </>
-          ) : (
-            <>
-              <span className="mr-2">Sign in with</span>
-              <ValyuLogoWithText />
-            </>
-          )}
+          <span className="mr-2">Sign in with</span>
+          <ValyuLogoWithText />
         </Button>
-
-        <p className="text-center text-sm text-muted-foreground">
-          Don&apos;t have an account? You can create one during sign-in.
-        </p>
       </DialogContent>
     </Dialog>
   );
